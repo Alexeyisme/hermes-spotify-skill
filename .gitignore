@@ -1,0 +1,19 @@
+# Credentials and secrets
+.env
+.spotify_cache
+.spotify_credentials
+.spotify_device
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
