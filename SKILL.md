@@ -1,7 +1,7 @@
 ---
 name: spotify
 description: Control Spotify playback via spotipy on a Linux machine (tested on Raspberry Pi). Use for any music playback request — play a song/album/artist, pause, skip, change device, get current track, browse playlists. Plays on the user's configured default device (typically a local raspotify speaker), but commands can target any Spotify Connect device on the user's account.
-version: 1.0.0
+version: 0.1.0
 license: MIT
 metadata:
   platform: raspberry-pi
@@ -64,7 +64,7 @@ auth = SpotifyOAuth(
     client_id=client_id,
     client_secret=client_secret,
     redirect_uri="http://127.0.0.1:8888/callback",
-    scope="user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private user-library-read user-top-read user-read-recently-played streaming",
+    scope="user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative user-library-read user-top-read user-read-recently-played streaming",
     cache_path=str(Path.home() / ".hermes" / ".spotify_cache"),
     open_browser=False,
 )
@@ -205,6 +205,22 @@ if current and current.get("item"):
     sp.current_user_saved_tracks_add([current["item"]["id"]])
 ```
 
+### Add a track to the queue
+
+```python
+results = sp.search(q="Never Gonna Give You Up", type="track", limit=1)
+if results["tracks"]["items"]:
+    sp.add_to_queue(uri=results["tracks"]["items"][0]["uri"], device_id=device_id)
+    print(f"Added to queue: {results['tracks']['items'][0]['name']}")
+```
+
+### Toggle shuffle / repeat
+
+```python
+sp.shuffle(True, device_id=device_id)   # True = on, False = off
+sp.repeat("track", device_id=device_id)  # "track", "context", or "off"
+```
+
 ## Error handling
 
 The most common spotipy exception is spotipy.exceptions.SpotifyException. Common errors:
@@ -231,3 +247,4 @@ except spotipy.exceptions.SpotifyException as e:
 - Always confirm to the user what you played by name and artist, not just "OK done". They want to know it picked the right thing.
 - After starting playback, you do not need to do anything else. The music keeps playing in the background. Hermes can return to its prompt.
 - Spotify search works in any language — just pass the user's query through unchanged.
+- **Security:** never print or echo the user's Client ID or Client Secret in code output. Read them from .env at runtime; do not embed them as string literals in snippets you execute.

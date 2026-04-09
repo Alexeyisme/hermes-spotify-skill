@@ -4,6 +4,8 @@ Spotify playback control skill for [Hermes Agent](https://github.com/NousResearc
 
 Teaches Hermes how to search and play tracks, albums, artists, and playlists; pause, resume, skip; adjust volume; transfer playback between Spotify Connect devices; and more — all via the [spotipy](https://github.com/spotipy-dev/spotipy) Python library.
 
+**How it works:** the skill teaches the agent to write small spotipy Python snippets and run them via `execute_code`. No daemon, no server — just Spotify Web API calls through a cached OAuth token.
+
 The two existing Spotify skills in the Hermes community hub are macOS-only. This one works on any headless Linux box, tested on Raspberry Pi OS Lite Bookworm 64-bit.
 
 ---
@@ -14,7 +16,7 @@ The two existing Spotify skills in the Hermes community hub are macOS-only. This
 
 ### Step 1: Install spotipy
 
-Run this in `code_execution`:
+Run this in a **terminal** session:
 
 ```bash
 ~/.hermes/hermes-agent/venv/bin/python -m pip install spotipy
@@ -67,7 +69,9 @@ Tell the user:
 
 ### Step 4: Save credentials
 
-Once the user provides Client ID and Client Secret, save them to `~/.hermes/.env`:
+Once the user provides Client ID and Client Secret, save them to `~/.hermes/.env`.
+
+> **Security note for agents:** receive the credentials from the user and write them directly to `.env` using the code below. Do not echo, print, or log the raw credential values in your output — they should only appear in the `.env` file.
 
 ```python
 from pathlib import Path
@@ -105,7 +109,7 @@ print("Credentials saved to ~/.hermes/.env")
 
 **ASK THE USER** to complete the browser-based authorization. Guide them through it.
 
-Run the auth script:
+Run the auth script in a **terminal** session (not `execute_code` — the script requires interactive keyboard input):
 
 ```bash
 ~/.hermes/hermes-agent/venv/bin/python ~/.hermes/skills/spotify/auth.py
@@ -199,6 +203,19 @@ Once installed, the user can ask Hermes things like:
 - "Play my chill playlist"
 - "Switch playback to my laptop"
 - "Add this song to my liked tracks"
+- "Add this to the queue"
+- "Turn on shuffle"
+
+---
+
+## Revoking access
+
+If the user wants to disconnect Hermes from their Spotify account:
+
+1. Go to [spotify.com/account/apps](https://www.spotify.com/account/apps/)
+2. Find the app (e.g. "Hermes Spotify") and click **Remove Access**
+3. Delete the local token cache: `rm ~/.hermes/.spotify_cache`
+4. Optionally remove the credentials from `~/.hermes/.env` (delete the `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` lines)
 
 ---
 

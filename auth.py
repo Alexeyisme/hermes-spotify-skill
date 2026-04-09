@@ -126,6 +126,12 @@ def _load_existing_credentials():
     if LEGACY_CREDS_PATH.exists():
         lines = LEGACY_CREDS_PATH.read_text().strip().split("\n")
         if len(lines) >= 2 and lines[0].strip() and lines[1].strip():
+            # Tighten permissions on legacy file if they're too open
+            try:
+                if LEGACY_CREDS_PATH.stat().st_mode & 0o077:
+                    LEGACY_CREDS_PATH.chmod(0o600)
+            except OSError:
+                pass
             return lines[0].strip(), lines[1].strip()
 
     return None, None
