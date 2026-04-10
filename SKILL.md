@@ -1,7 +1,7 @@
 ---
 name: spotify
 description: Control Spotify playback via spotipy on a Linux machine (tested on Raspberry Pi). Use for any music playback request — play a song/album/artist, pause, skip, change device, get current track, browse playlists. Plays on the user's configured default device (typically a local raspotify speaker), but commands can target any Spotify Connect device on the user's account.
-version: 0.1.0
+version: 0.2.0
 license: MIT
 metadata:
   platform: raspberry-pi
@@ -179,6 +179,21 @@ target = find_device(sp, "iphone")
 if target:
     sp.transfer_playback(device_id=target["id"], force_play=True)
 ```
+
+### Wake up an inactive device
+
+If a device is registered in your Spotify account but showing `is_active: false` (dormant/asleep), use `transfer_playback()` with `force_play=True` to forcefully wake it up and start playback:
+
+```python
+device_id = "a31aad2b-76b0-4954-bdb8-a164c0a70b4f_amzn_1"  # example Echo device
+try:
+    sp.transfer_playback(device_id=device_id, force_play=True)
+    print("Device woken and playback transferred")
+except spotipy.exceptions.SpotifyException as e:
+    print(f"Device unreachable: {e.msg}")
+```
+
+Unlike `start_playback()`, this method doesn't require specifying what to play. The `force_play=True` parameter tells Spotify to activate the device even if it was dormant. If the device is truly offline or unreachable, it will still fail with a 404, but for asleep/dormant devices, this wakes them and begins playback of whatever is queued.
 
 ### List user's playlists
 
