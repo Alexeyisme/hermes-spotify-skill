@@ -29,12 +29,12 @@ Any user request about music playback:
 - "what's playing?"
 - "where's it playing?" (device info)
 
-If the MCP tools aren't registered, fall back to the legacy spotipy patterns
-in `SKILL.md.legacy` (kept for reference only — prefer the MCP tools).
-
 ## Tools
 
-All tools are registered as `mcp_spotify_<name>`.
+All tools are registered as `mcp_spotify_<name>` and are **first-class native tools** — call them directly like you call `terminal` or `read_file`. Do NOT wrap them in shell commands, do NOT run `hermes tools ...`, do NOT pipe JSON-RPC to the MCP server. Just call the tool.
+
+Example (correct): call `mcp_spotify_list_devices` with `{}`.
+Example (wrong): `terminal("hermes tools mcp_spotify_list_devices")`.
 
 | Tool | Args | What it does |
 |---|---|---|
@@ -102,6 +102,9 @@ Never retry silently more than once. Surface the error to the user verbatim.
 4. **Repeat mode is three strings.** `"off"`, `"track"`, `"context"` — never `"true"`, `"on"`, `"all"`.
 5. **The MCP server reuses one spotipy client across calls.** First call is
    slightly slower (token refresh), rest are fast. Don't add warm-up calls.
+6. **Two layers must agree for tools to appear in the agent schema, AND the toolset name is `mcp-spotify` (hyphen), NOT `spotify`.** Registering the server under `mcp_servers` is only half the story. The MCP-generated toolset (`mcp-spotify`) must *also* be listed under `platform_toolsets.<platform>` in `~/.hermes/config.yaml`. **`hermes tools enable spotify` does NOT work** — it enables the unrelated built-in `plugins/spotify/` plugin (tools named `spotify_playback`, `spotify_devices`, etc.), not the MCP skill. And `hermes tools enable mcp-spotify` is rejected with "Unknown toolset" because the CLI only knows hard-coded built-in toolsets. The MCP toolset must be added by **editing `~/.hermes/config.yaml` directly**. Symptom when this step is skipped: `hermes mcp test spotify` shows all 16 tools ✓ and `hermes mcp list` shows ✓ enabled, but the agent has no `mcp_spotify_*` functions in its schema and falls back to subprocess hacks. See `references/mcp-tool-injection-debug.md` for the full diagnosis path.
+7. **Session-baked schema.** Enabling a toolset mid-session does NOT inject tools into the currently-running conversation — the schema was set at session start. Always verify in a fresh session.
+8. **Never fall back to raw JSON-RPC subprocess piping or direct spotipy calls as a "workaround"** when tools appear missing. That masks the config bug instead of fixing it. Diagnose the toolset-enable layer first.
 
 ## Install (one-time)
 
@@ -117,4 +120,19 @@ See `README.md` in this skill's repo. Summary:
        command: "/home/USER/.hermes/hermes-agent/venv/bin/python"
        args: ["/home/USER/.hermes/skills/spotify/spotify_mcp.py"]
    ```
-5. Restart Hermes.
+5. **Enable the MCP toolset per platform** (REQUIRED — see Pitfall 6). The `hermes tools enable` CLI does NOT work for MCP toolsets — you must **edit `~/.hermes/config.yaml` directly**, adding `mcp-spotify` (with hyphen) to each platform's list under `platform_toolsets`:
+   ```yaml
+   platform_toolsets:
+     cli:
+       - browser
+       - ...existing entries...
+       - mcp-spotify      # ← add this, alphabetical order
+       - ...
+     telegram:            # and any other platforms you use (discord, slack, ...)
+       - ...
+       - mcp-spotify
+       - ...
+   ```
+   ⚠️ Do NOT run `hermes tools enable spotify` — that enables the unrelated built-in `plugins/spotify/` plugin, not this MCP skill.
+6. Verify server: `hermes mcp test spotify` → should show "✓ Tools discovered: 16".
+7. Restart the gateway (`/restart` in a messaging platform) or exit and relaunch CLI. Tools appear as `mcp_spotify_*` in the agent's schema. Verify with a fresh session: ask "list tools containing spotify" and expect all 16 `mcp_spotify_*` names.
