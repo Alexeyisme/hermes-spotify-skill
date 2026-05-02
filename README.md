@@ -2,7 +2,9 @@
 
 Spotify playback control for [Hermes Agent](https://github.com/NousResearch/hermes-agent) on Linux / Raspberry Pi.
 
-Since **v1.0.0** this skill ships as a thin MCP server (`spotify_mcp.py`) plus a ~1.5KB `SKILL.md`. The MCP server exposes 16 tools — `play`, `pause`, `resume`, `next_track`, `previous_track`, `volume`, `volume_adjust`, `shuffle`, `repeat`, `queue`, `now_playing`, `list_devices`, and MCP protocol helpers (`list_prompts`, `get_prompt`, `list_resources`, `read_resource`) — and hides all the fragile bits (OAuth cache, scope handling, device wake, error mapping) inside Python. The agent just picks a tool and fills 0–2 args, which is exactly what smaller/local models are good at.
+Since **v1.0.0** this skill ships as a thin MCP server (`spotify_mcp.py`) plus a ~1.5KB `SKILL.md`. The MCP server exposes 12 tools — `play`, `pause`, `resume`, `next_track`, `previous_track`, `volume`, `volume_adjust`, `shuffle`, `repeat`, `queue`, `now_playing`, `list_devices` — and hides all the fragile bits (OAuth cache, scope handling, device wake, error mapping) inside Python. The agent just picks a tool and fills 0–2 args, which is exactly what smaller/local models are good at.
+
+> **Note on tool counts:** `spotify_mcp.py --list-tools` reports **12** (the real Spotify tools). When Hermes registers them via MCP, you'll see **16** `mcp_spotify_*` names in the registry — the extra 4 (`list_prompts`, `get_prompt`, `list_resources`, `read_resource`) are generic MCP protocol helpers auto-exposed by the `mcp[cli]` SDK, not features of this skill. Ignore them.
 
 Verified working with **qwen3.6:35b-a3b-nvfp4 (local)** and **Claude Opus 4.7 (OpenRouter)** — the tools are model-agnostic.
 
@@ -179,12 +181,12 @@ platform_toolsets:
 
 > ⚠️ **Do NOT run `hermes tools enable spotify`.** It reports success but enables an unrelated bundled plugin (`plugins/spotify/`) — completely different tools, not this MCP skill. The `hermes tools enable` CLI also rejects `mcp-spotify` as "Unknown toolset". **You must edit `config.yaml` directly.**
 
-Then **restart Hermes** (`/restart` in a messaging platform, or exit and relaunch the CLI). On startup you should see the 16 tools discovered and registered as `mcp_spotify_play`, `mcp_spotify_pause`, etc.
+Then **restart Hermes** (`/restart` in a messaging platform, or exit and relaunch the CLI). On startup you should see the 12 tools discovered and registered as `mcp_spotify_play`, `mcp_spotify_pause`, etc. (Registry may show 16 — see the tool-count note at the top of this README.)
 
 Quick checks from the command line:
 
 ```bash
-# Server health — should show "✓ Tools discovered: 16"
+# Server health — should show "✓ Tools discovered: 12"
 hermes mcp test spotify
 
 # Confirm mcp-spotify toolset is enabled for your platform
@@ -242,7 +244,7 @@ echo "SPOTIFY_DEFAULT_DEVICE=YourPiName" >> ~/.hermes/.env
 | `INVALID_CLIENT: Invalid redirect URI` | Redirect URI in Spotify dev app doesn't match | Must be exactly `http://127.0.0.1:8888/callback` — no trailing slash, no https, no localhost |
 | `No active device found` / `No Spotify Connect devices visible` | No Spotify Connect device is warm | Open Spotify on phone and tap device picker, or check `sudo systemctl status raspotify` |
 | `401 Unauthorized` | Token expired or revoked | Re-run `auth.py` |
-| `mcp_spotify_*` tools not appearing in agent schema | Most common: `mcp-spotify` (with hyphen) is missing from `platform_toolsets.<platform>` in `~/.hermes/config.yaml`. Also possible: `mcp[cli]` package missing in venv, or `mcp_servers.spotify` not registered. | 1) Verify server: `hermes mcp test spotify` → "✓ Tools discovered: 16". 2) Verify enablement: `grep mcp-spotify ~/.hermes/config.yaml` under your platform's list. 3) If missing, edit config.yaml manually (NOT `hermes tools enable`). 4) Restart gateway / fresh session. Full diagnosis: [`references/mcp-tool-injection-debug.md`](references/mcp-tool-injection-debug.md) |
+| `mcp_spotify_*` tools not appearing in agent schema | Most common: `mcp-spotify` (with hyphen) is missing from `platform_toolsets.<platform>` in `~/.hermes/config.yaml`. Also possible: `mcp[cli]` package missing in venv, or `mcp_servers.spotify` not registered. | 1) Verify server: `hermes mcp test spotify` → "✓ Tools discovered: 12". 2) Verify enablement: `grep mcp-spotify ~/.hermes/config.yaml` under your platform's list. 3) If missing, edit config.yaml manually (NOT `hermes tools enable`). 4) Restart gateway / fresh session. Full diagnosis: [`references/mcp-tool-injection-debug.md`](references/mcp-tool-injection-debug.md) |
 | `Spotify credentials not found` on first tool call | `auth.py` never run, or `.env` missing `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Run Step 4 + Step 5 of setup |
 | Hermes doesn't recognize the skill | Skill files not in the right place | Check `~/.hermes/skills/spotify/{SKILL.md,spotify_mcp.py,auth.py}` all exist; restart Hermes |
 

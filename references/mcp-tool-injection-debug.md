@@ -93,7 +93,7 @@ Run these in order. Stop at the first failure — that's your actual bug.
 ```bash
 # 1. Server process and stdio transport healthy?
 hermes mcp list                 # expect: spotify  ✓ enabled
-hermes mcp test spotify         # expect: ✓ Connected, ✓ Tools discovered: 16
+hermes mcp test spotify         # expect: ✓ Connected, ✓ Tools discovered: 12
 
 # 2. Does the registry actually have an 'mcp-spotify' toolset?
 cd ~/.hermes/hermes-agent && venv/bin/python -c "
@@ -104,6 +104,8 @@ print('Toolsets:', sorted(registry.get_registered_toolset_names()))
 print('Spotify tools:', len([t for t in registry.get_all_tool_names() if 'spotify' in t.lower()]))
 "
 # Expect: 'mcp-spotify' in the toolset list, 16 spotify tools registered.
+# (12 real Spotify tools + 4 generic MCP protocol helpers auto-added by mcp[cli]
+# SDK — list_prompts, get_prompt, list_resources, read_resource. This is normal.)
 
 # 3. Is 'mcp-spotify' (with hyphen) enabled for the platform you're on?
 grep -A 60 '^platform_toolsets:' ~/.hermes/config.yaml | grep -B1 -A1 'mcp-spotify'
@@ -117,7 +119,9 @@ grep -A 60 '^platform_toolsets:' ~/.hermes/config.yaml | grep -B1 -A1 'mcp-spoti
 # 5. Restart the gateway (/restart) or exit + relaunch CLI.
 
 # 6. Verify in a fresh session: ask "list tools containing spotify"
-#    Expect: all 16 mcp_spotify_* names.
+#    Expect: 12 real mcp_spotify_* tools (play, pause, ..., list_devices)
+#            plus 4 MCP helpers (list_prompts, get_prompt, list_resources,
+#            read_resource) = 16 total. Only the 12 real ones are useful.
 ```
 
 ## Why the common fallbacks fail
@@ -226,9 +230,10 @@ If `mcp_spotify_*` tools are missing:
 Verified end-to-end on this stack:
 - Fresh `hermes chat -Q --query "list tools with 'spotify'"` returned `NONE`
   until `mcp-spotify` was added to `platform_toolsets.cli`.
-- After the edit + gateway `/restart`, the same query returned all 16
-  `mcp_spotify_*` tools and subsequent tool calls succeeded in ~0.6s with
-  no subprocess fallback.
+- After the edit + gateway `/restart`, the same query returned all 12 real
+  `mcp_spotify_*` tools (plus 4 auto-generated MCP protocol helpers, 16 total
+  registry entries) and subsequent tool calls succeeded in ~0.6s with no
+  subprocess fallback.
 - Both qwen (via custom provider) and Claude Opus (via OpenRouter) saw the
   tools identically — the issue is model-agnostic, config-driven.
 - `hermes tools enable spotify --platform cli` reported `✓ Enabled: spotify`
