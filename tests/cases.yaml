@@ -1,0 +1,63 @@
+# Locked test cases for the skill-simplification optimizer.
+#
+# Each case maps a natural-language user request to the expected MCP tool call
+# (name + arguments). Grader is deterministic: check tool name match first,
+# then required args exact match, then optional args don't contradict.
+#
+# See: /home/homunculus/.hermes/plans/skill-simplification-loop.md §7
+
+version: 1
+skill: spotify
+model_under_test: qwen3.6:35b-a3b-nvfp4@mbpm1max32.local
+temperature: 0.3
+thinking_mode: false
+runs_per_case: 5
+passing_threshold: 0.8   # 4/5 correct counts as a pass
+
+cases:
+  - id: play_track
+    request: "play Rolling in the Deep by Adele"
+    expected_tool: mcp_spotify_play
+    expected_args_required:
+      query:
+        mode: contains_all_ci
+        values: ["rolling", "deep"]
+    expected_args_optional:
+      kind: "track"            # default, OK if omitted
+    forbidden_args: []
+
+  - id: pause
+    request: "pause the music"
+    expected_tool: mcp_spotify_pause
+    expected_args_required: {}
+    expected_args_optional: {}
+    forbidden_args: []
+
+  - id: louder
+    request: "make it louder"
+    expected_tool: mcp_spotify_volume_adjust
+    expected_args_required:
+      delta:
+        mode: range
+        min: 1
+        max: 25            # any positive bump counts; 10 is ideal
+    forbidden_args: []
+
+  - id: play_album
+    request: "play the album Dark Side of the Moon"
+    expected_tool: mcp_spotify_play
+    expected_args_required:
+      query:
+        mode: contains_all_ci
+        values: ["dark side"]
+      kind:
+        mode: exact
+        value: "album"
+    forbidden_args: []
+
+  - id: now_playing
+    request: "what's currently playing?"
+    expected_tool: mcp_spotify_now_playing
+    expected_args_required: {}
+    expected_args_optional: {}
+    forbidden_args: []
