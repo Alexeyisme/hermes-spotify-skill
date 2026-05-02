@@ -1,10 +1,10 @@
 # hermes-spotify-skill
 
-Spotify playback control skill for [Hermes Agent](https://github.com/NousResearch/hermes-agent) on Linux / Raspberry Pi.
+Spotify playback control for [Hermes Agent](https://github.com/NousResearch/hermes-agent) on Linux / Raspberry Pi.
 
-Teaches Hermes how to search and play tracks, albums, artists, and playlists; pause, resume, skip; adjust volume; transfer playback between Spotify Connect devices; and more — all via the [spotipy](https://github.com/spotipy-dev/spotipy) Python library.
+Since **v1.0.0** this skill ships as a thin MCP server (`spotify_mcp.py`) plus a ~1.5KB `SKILL.md`. The MCP server exposes 12 tools — `play`, `pause`, `resume`, `next_track`, `previous_track`, `volume`, `volume_adjust`, `shuffle`, `repeat`, `queue`, `now_playing`, `list_devices` — and hides all the fragile bits (OAuth cache, scope handling, device wake, error mapping) inside Python. The agent just picks a tool and fills 0–2 args, which is exactly what smaller/local models are good at.
 
-**How it works:** the skill teaches the agent to write small spotipy Python snippets and run them via `execute_code`. No daemon, no server — just Spotify Web API calls through a cached OAuth token.
+**How it works:** `spotify_mcp.py` is a stdio MCP server that wraps [spotipy](https://github.com/spotipy-dev/spotipy). Hermes' built-in MCP client (see the [`native-mcp` skill](https://github.com/NousResearch/hermes-agent)) spawns it at startup, discovers the tools, and registers them as `mcp_spotify_*`. No daemon, no HTTP, no separate service.
 
 The two existing Spotify skills in the Hermes community hub are macOS-only. This one works on any headless Linux box, tested on Raspberry Pi OS Lite Bookworm 64-bit.
 
@@ -14,13 +14,16 @@ The two existing Spotify skills in the Hermes community hub are macOS-only. This
 
 > **For the agent:** follow these steps in order. Do everything you can autonomously. When a step says **ASK THE USER**, stop and guide them through it — they will need to interact with a browser or a third-party website.
 
-### Step 1: Install spotipy
+### Step 1: Install Python dependencies
 
 Run this in a **terminal** session:
 
 ```bash
-~/.hermes/hermes-agent/venv/bin/python -m pip install spotipy
+~/.hermes/hermes-agent/venv/bin/python -m pip install spotipy "mcp[cli]"
 ```
+
+- `spotipy` — Spotify Web API client used by the MCP server
+- `mcp[cli]` — Model Context Protocol Python SDK
 
 If the Hermes venv is at a different path, look for `~/.hermes/hermes-agent/venv/bin/python` or `~/.hermes/venv/bin/python`.
 
@@ -32,18 +35,21 @@ git clone https://github.com/Alexeyisme/hermes-spotify-skill.git /tmp/hermes-spo
 
 # Copy the skill files into Hermes
 mkdir -p ~/.hermes/skills/spotify
-cp /tmp/hermes-spotify-skill/SKILL.md ~/.hermes/skills/spotify/
-cp /tmp/hermes-spotify-skill/auth.py ~/.hermes/skills/spotify/
+cp /tmp/hermes-spotify-skill/SKILL.md       ~/.hermes/skills/spotify/
+cp /tmp/hermes-spotify-skill/spotify_mcp.py ~/.hermes/skills/spotify/
+cp /tmp/hermes-spotify-skill/auth.py        ~/.hermes/skills/spotify/
 
 # Clean up
 rm -rf /tmp/hermes-spotify-skill
 ```
 
-Verify the skill file exists:
+Verify the skill files exist:
 
 ```bash
-head -5 ~/.hermes/skills/spotify/SKILL.md
+ls -l ~/.hermes/skills/spotify/
 ```
+
+You should see `SKILL.md`, `spotify_mcp.py`, and `auth.py`.
 
 ### Step 3: Create a Spotify Developer App
 
@@ -140,7 +146,29 @@ echo "SPOTIFY_DEFAULT_DEVICE=device-name-here" >> ~/.hermes/.env
 
 The name is matched case-insensitively as a substring. If not configured, the first available device is used.
 
-### Step 7: Verify
+### Step 7: Register the MCP server with Hermes
+
+Edit `~/.hermes/config.yaml` and add the Spotify server under `mcp_servers`. Substitute `USER` with the actual user (e.g. `bb` or `homunculus`):
+
+```yaml
+mcp_servers:
+  spotify:
+    command: "/home/USER/.hermes/hermes-agent/venv/bin/python"
+    args: ["/home/USER/.hermes/skills/spotify/spotify_mcp.py"]
+    timeout: 30
+```
+
+Then **restart Hermes**. On startup you should see the 12 tools discovered and registered as `mcp_spotify_play`, `mcp_spotify_pause`, etc.
+
+Quick check from the command line (no Hermes needed):
+
+```bash
+~/.hermes/hermes-agent/venv/bin/python ~/.hermes/skills/spotify/spotify_mcp.py --list-tools
+```
+
+This prints the 12 tool signatures without starting the server — useful for sanity-checking after an upgrade.
+
+### Step 8: Verify
 
 Tell the user the skill is installed and ready. Offer to test it by playing a song. Use the patterns from the SKILL.md to search for a track and start playback.
 
@@ -184,27 +212,30 @@ echo "SPOTIFY_DEFAULT_DEVICE=YourPiName" >> ~/.hermes/.env
 | Problem | Cause | Fix |
 |---------|-------|-----|
 | `INVALID_CLIENT: Invalid redirect URI` | Redirect URI in Spotify dev app doesn't match | Must be exactly `http://127.0.0.1:8888/callback` — no trailing slash, no https, no localhost |
-| `No active device found` (404) | No Spotify Connect device is warm | Open Spotify on phone and tap device picker, or check `sudo systemctl status raspotify` |
+| `No active device found` / `No Spotify Connect devices visible` | No Spotify Connect device is warm | Open Spotify on phone and tap device picker, or check `sudo systemctl status raspotify` |
 | `401 Unauthorized` | Token expired or revoked | Re-run `auth.py` |
-| Hermes doesn't recognize the skill | Skill files not in the right place | Check `~/.hermes/skills/spotify/SKILL.md` exists; restart Hermes |
+| `mcp_spotify_*` tools not registered in Hermes | MCP server not configured or mcp package missing | Verify `mcp_servers.spotify` in `~/.hermes/config.yaml` and that `mcp[cli]` is installed in the venv; check Hermes startup logs |
+| `Spotify credentials not found` on first tool call | `auth.py` never run, or `.env` missing `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Run Step 4 + Step 5 of setup |
+| Hermes doesn't recognize the skill | Skill files not in the right place | Check `~/.hermes/skills/spotify/{SKILL.md,spotify_mcp.py,auth.py}` all exist; restart Hermes |
 
 ---
 
 ## What the skill can do
 
-Once installed, the user can ask Hermes things like:
+Once installed and registered as an MCP server, the user can ask Hermes things like:
 
-- "Play Bohemian Rhapsody"
-- "Play Dark Side of the Moon by Pink Floyd"
-- "Put on some Queen"
-- "Pause" / "Resume" / "Skip this track"
-- "What's currently playing?"
-- "Set volume to 30"
-- "Play my chill playlist"
-- "Switch playback to my laptop"
-- "Add this song to my liked tracks"
-- "Add this to the queue"
-- "Turn on shuffle"
+- "Play Bohemian Rhapsody" → `mcp_spotify_play(query="Bohemian Rhapsody")`
+- "Play Dark Side of the Moon album" → `mcp_spotify_play(query="Dark Side of the Moon", kind="album")`
+- "Put on some Queen" → `mcp_spotify_play(query="Queen", kind="artist")`
+- "Play my chill playlist" → `mcp_spotify_play(query="chill", kind="playlist")`
+- "Pause" / "Resume" / "Next" / "Previous"
+- "Louder" / "Quieter" / "Set volume to 30"
+- "What's currently playing?" → `mcp_spotify_now_playing()`
+- "What devices are available?" → `mcp_spotify_list_devices()`
+- "Turn on shuffle" / "Repeat this song"
+- "Queue this song next"
+
+See `SKILL.md` for the full trigger → tool map.
 
 ---
 
